@@ -1,0 +1,151 @@
+
+#%% Import Library
+
+import pandas as pd
+from datetime import datetime
+from IPython.display import display
+import numpy as np
+import os
+#%% Load and Set Data
+
+# Load the excel file
+file_path = "/Users/rorymcmullan/Downloads/Drawdown_Data.xlsx"
+
+
+# load both sheets into the dataframe
+
+prices_df = pd.read_excel(file_path, sheet_name='Data')
+returns_df  =pd.read_excel(file_path, sheet_name='Returns')
+
+# Convert 'Date' column to datetime and set as index
+prices_df['Date'] = pd.to_datetime(prices_df['Date'], format='%d/%m/%Y')
+returns_df['Date'] = pd.to_datetime(returns_df['Date'], format='%d/%m/%Y')
+
+prices_df.set_index('Date', inplace=True)
+returns_df.set_index('Date', inplace=True)
+
+#Display the df
+
+#display(prices_df.head())
+#display(returns_df.head())
+
+#%% Worst 1 day return for multiple periods
+"""FIND THE WORST 1 DAY RETURN FOR MULTIPLE CUSTOM PERIODS"""
+
+# Ensure the index is sorted
+returns_df.sort_index(inplace=True)
+
+# Define multiple periods with start and end dates
+periods = [
+    ('03/01/2011', '23/07/2024')]
+
+
+# Convert the date strings to datetime objects with the correct format
+periods = [(pd.to_datetime(start, format='%d/%m/%Y'), pd.to_datetime(end, format='%d/%m/%Y')) for start, end in periods]
+
+# Iterate over each period to find the worst 1-day return
+for period in periods:
+    start_date, end_date = period  # Unpack the tuple into start_date and end_date
+
+    # Filter the returns for the given dates
+    filtered_returns_df = returns_df.loc[start_date:end_date]
+
+    # Find the worst 1-day return for each column (each index)
+    Minimum_Daily_Returns = filtered_returns_df.min()
+
+    # Display the results
+    print(f"Worst 1-Day Returns from {start_date} to {end_date}:")
+    print(Minimum_Daily_Returns)
+
+
+#%% Maximum Drawdown and Recovery Time Calculation
+
+prices_df.sort_index(inplace=True)
+
+# Function to calculate the maximum drawdown and recovery time
+def calculate_max_drawdown_with_recovery(prices):
+    try:
+        # Calculate the cumulative returns
+        cumulative = prices / prices.iloc[0]
+
+        # Calculate the running maximum
+        running_max = cumulative.cummax()
+
+        # Calculate the drawdown
+        drawdown = (cumulative - running_max) / running_max
+
+        # Find the maximum drawdown
+        max_drawdown = drawdown.min()
+
+        # Get the date of the maximum drawdown
+        drawdown_bottom_date = drawdown.idxmin()
+
+        # Find the date when the stock recovers (i.e., when the price returns to the running maximum)
+        recovery_date = drawdown[drawdown_bottom_date:].ge(0).idxmax()
+
+        # Calculate recovery time in days
+        recovery_time = (recovery_date - drawdown_bottom_date).days
+
+        return pd.Series([max_drawdown, recovery_time], index=['Max Drawdown', 'Recovery Time (days)'])
+    
+    except Exception as e:
+        print(f"Error calculating max drawdown for {prices.name}: {e}")
+        return pd.Series([None, None], index=['Max Drawdown', 'Recovery Time (days)'])
+
+# Loop through each period to calculate the maximum drawdown and recovery time
+for start_date, end_date in periods:
+    # Filter the prices for the given dates
+    filtered_prices_df = prices_df.loc[start_date:end_date]
+    
+    # Apply the function to each column
+    results = filtered_prices_df.apply(calculate_max_drawdown_with_recovery)
+
+    # Print the maximum drawdowns and recovery times for the current period
+    print(f"Maximum Drawdowns and Recovery Times from {start_date} to {end_date}:")
+    print(results)
+
+#%% Latest Drawdown and Recovery time (Daily)
+# Function to calculate the latest maximum drawdown and recovery time
+def calculate_latest_drawdown_with_recovery(prices):
+    try:
+        # Calculate the cumulative returns
+        cumulative = prices / prices.iloc[0]
+
+        # Calculate the running maximum
+        running_max = cumulative.cummax()
+
+        # Calculate the drawdown
+        drawdown = (cumulative - running_max) / running_max
+
+        # Get the date of the most recent drawdown (closest to the end of the period)
+        recent_drawdown_date = drawdown[drawdown < 0].idxmax()
+
+        # Get the value of the drawdown at that date
+        recent_drawdown = drawdown.loc[recent_drawdown_date]
+
+        # Find the date when the stock recovers from this drawdown
+        recovery_date = drawdown[recent_drawdown_date:].ge(0).idxmax()
+
+        # Calculate recovery time in days
+        recovery_time = (recovery_date - recent_drawdown_date).days
+
+        return pd.Series([recent_drawdown, recovery_time], index=['Latest Drawdown', 'Recovery Time (days)'])
+    
+    except Exception as e:
+        print(f"Error calculating latest drawdown for {prices.name}: {e}")
+        return pd.Series([None, None], index=['Latest Drawdown', 'Recovery Time (days)'])
+
+# Set the start and end date for the analysis (2019 to present)
+start_date = pd.to_datetime('01/01/2019', format='%d/%m/%Y')
+end_date = pd.to_datetime('today')
+
+# Filter the prices for the given period (2019 to present)
+filtered_prices_df = prices_df.loc[start_date:end_date]
+
+# Apply the function to each column
+latest_results = filtered_prices_df.apply(calculate_latest_drawdown_with_recovery)
+
+# Print the latest drawdowns and recovery times for the period 2019 to present
+print(f"Latest Drawdowns and Recovery Times from {start_date.date()} to {end_date.date()}:")
+print(latest_results)
+
